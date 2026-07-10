@@ -1,56 +1,69 @@
 # BountyProof MCP
 
-MCP server minimal untuk bug bounty dengan urutan kerja yang ketat:
+BountyProof is a small MCP server for authorized bug bounty work. It keeps the workflow explicit and evidence-driven:
 
 ```text
-session(scope + rules) → preflight → surface import/discovery → high-signal or authorization checks → verification → evidence
+session (scope + rules) -> preflight -> surface discovery/import -> targeted checks -> verification -> evidence
 ```
 
-Pemeriksaan WAF bukan finding. Ia hanya bagian dari **preflight gate** untuk mengetahui apakah live testing layak diteruskan atau kemungkinan membuang waktu karena challenge, rate limit, respons tidak stabil, redirect keluar host, atau proteksi edge lainnya.
+WAF detection is not treated as a vulnerability. It is part of the preflight check, where BountyProof decides whether live testing is practical or likely to be wasted on challenges, rate limits, unstable responses, off-host redirects, or other edge protection.
 
-## Mengapa minimal
+## What it uses
 
-BountyProof memakai HTTP client internal dan hanya dua binary eksternal:
+BountyProof has a built-in HTTP client and relies on only two external binaries:
 
-- **Katana** untuk discovery URL yang dibatasi ke hostname yang lolos preflight.
-- **Nuclei** untuk template HTTP severity high/critical; fuzz, DoS, brute-force, dan headless selalu dikecualikan.
+- **Katana** for URL discovery, restricted to hosts that passed preflight.
+- **Nuclei** for high- and critical-severity HTTP templates. Fuzzing, DoS, brute force, and headless templates are excluded.
 
-Tidak ada shell tool generik, payload kustom, mass scanning, subdomain brute force, credential attack, atau automatic exploitation.
+There is no generic shell tool, custom payload runner, mass scanner, subdomain brute force, credential attack, or automatic exploitation.
 
-## Dua belas tool MCP
+## MCP tools
 
-1. `start_session(...)` — menyimpan program, scope, out-of-scope, rules, aktivitas yang diizinkan, larangan, rate limit, dan otorisasi tanpa traffic.
-2. `scope_check(session_id, url)` — validasi scope sesi tanpa request HTTP.
-3. `preflight_target(session_id, url)` — menilai target sebagai `clear`, `guarded`, atau `blocked`.
-4. `discover_surface(...)` — discovery Katana setelah preflight.
-5. `scan_high_signal(...)` — Nuclei HTTP high/critical dengan rate limit ketat.
-6. `verify_finding(...)` — menjalankan ulang satu template yang sama 2-3 kali.
-7. `find_origin_candidates(...)` — mencari kandidat origin melalui DNS hint yang tetap in-scope dan historical A record opsional.
-8. `verify_origin_candidate(...)` — setelah persetujuan baru, membandingkan satu respons edge dan satu direct-IP HTTPS.
-9. `import_surface(...)` — mengimpor HAR, OpenAPI, atau Postman dengan scope filtering dan redaksi nilai.
-10. `register_auth_profiles(...)` — menyimpan role dan nama environment variable, bukan credential.
-11. `compare_authorization(...)` — membandingkan satu GET yang sama sebagai owner dan identitas lain selama 2-3 putaran.
-12. `get_report(...)` — membaca laporan JSON aman atau Markdown.
+1. `start_session(...)` records the program, scope, exclusions, rules, allowed activities, restrictions, rate limit, and authorization. It does not send network traffic.
+2. `scope_check(session_id, url)` checks a URL against the session scope without sending a request.
+3. `preflight_target(session_id, url)` classifies a target as `clear`, `guarded`, or `blocked`.
+4. `discover_surface(...)` runs Katana after a successful preflight.
+5. `scan_high_signal(...)` runs a tightly rate-limited Nuclei scan using high- or critical-severity HTTP templates.
+6. `verify_finding(...)` repeats one matched template two or three times.
+7. `find_origin_candidates(...)` looks for possible origin IPs through in-scope DNS hints and, when configured, historical A records.
+8. `verify_origin_candidate(...)` compares one edge response with one direct-IP HTTPS response after fresh user approval.
+9. `import_surface(...)` imports HAR, OpenAPI, or Postman data with scope filtering and value redaction.
+10. `register_auth_profiles(...)` stores roles and environment variable names, never credential values.
+11. `compare_authorization(...)` compares the same GET request as the owner and another identity for two or three rounds.
+12. `get_report(...)` returns a sanitized JSON or Markdown report.
 
-Semua tool selain `start_session` wajib memakai `session_id`. Out-of-scope diperiksa sebelum in-scope, termasuk URL path prefix. Aktivitas ditolak jika tidak tercantum dalam `allowed_activities` sesi (`preflight`, `discovery`, `nuclei-scan`, `verification`, `origin-discovery`, `origin-verification`, `surface-import`, `authorization-testing`). Live discovery, scan, dan authorization comparison juga wajib menyertakan `preflight_run_id`. Scheme, host, dan port harus sama dengan target preflight. Gate `blocked` tidak dapat dilewati. Gate `guarded` memerlukan review manual dan `override_guarded=true`.
+Every tool except `start_session` requires a `session_id`. Exclusions take priority over inclusions, including URL path prefixes. An activity is rejected unless it appears in the session's `allowed_activities` list:
 
-## Makna gate preflight
+```text
+preflight
+discovery
+nuclei-scan
+verification
+origin-discovery
+origin-verification
+surface-import
+authorization-testing
+```
 
-| Gate | Makna | Aksi |
+Live discovery, scanning, and authorization comparison also require a `preflight_run_id`. The scheme, host, and port must match the preflight target. A `blocked` result cannot be overridden. A `guarded` result requires a manual review and `override_guarded=true`.
+
+## Preflight results
+
+| Result | Meaning | Next step |
 |---|---|---|
-| `clear` | Baseline stabil, tidak ada friction jelas | Lanjut secara terukur |
-| `guarded` | Ada WAF/CDN, redirect, latency tinggi, atau respons tidak stabil | Review policy dan strategi |
-| `blocked` | Challenge/block berulang, rate limit, atau target gagal diakses | Hentikan automasi live |
+| `clear` | The baseline is stable and no obvious friction was found | Continue at the approved rate |
+| `guarded` | A WAF/CDN, redirect, high latency, or unstable response was observed | Review the program rules and testing approach |
+| `blocked` | Repeated challenges, blocks, rate limits, or connection failures were observed | Stop live automation |
 
-Deteksi Cloudflare, Akamai, Imperva, CloudFront, F5, Sucuri, Fastly, atau Azure edge hanya metadata keputusan. Tidak pernah dibuat sebagai laporan vulnerability.
+Cloudflare, Akamai, Imperva, CloudFront, F5, Sucuri, Fastly, and Azure edge indicators are recorded only as preflight metadata. They are never reported as vulnerabilities.
 
-## Instalasi
+## Installation
 
-Persyaratan:
+Requirements:
 
-- Python 3.11+
+- Python 3.11 or newer
 - Katana
-- Nuclei dan nuclei-templates
+- Nuclei and nuclei-templates
 
 ```bash
 git clone https://github.com/skyxtools/bountyproof-mcp.git
@@ -60,7 +73,7 @@ source .venv/bin/activate            # Windows: .venv\Scripts\activate
 python -m pip install -e .
 ```
 
-Konfigurasi runtime PowerShell:
+Basic PowerShell configuration:
 
 ```powershell
 $env:BOUNTYPROOF_ALLOWED_PORTS = "443"
@@ -68,26 +81,28 @@ $env:BOUNTYPROOF_CONTACT = "researcher@example.com"
 bountyproof-mcp
 ```
 
-Jika binary tidak berada di `PATH`:
+If Katana or Nuclei is not in `PATH`, set the executable paths explicitly:
 
 ```powershell
 $env:BOUNTYPROOF_KATANA_BIN = "C:\Tools\katana.exe"
 $env:BOUNTYPROOF_NUCLEI_BIN = "C:\Tools\nuclei.exe"
 ```
 
-## OpenCode
+## OpenCode setup
 
-Salin [opencode.jsonc.example](opencode.jsonc.example) menjadi `opencode.jsonc` di project OpenCode Anda, lalu ganti absolute path executable. Atur `BOUNTYPROOF_WORKSPACE` serta credential variables di shell sebelum OpenCode dijalankan. OpenCode melakukan substitusi `{env:VARIABLE}` dan meneruskannya melalui opsi `environment` ke proses MCP; secret tidak perlu ditulis langsung di config.
+Copy [opencode.jsonc.example](opencode.jsonc.example) to `opencode.jsonc` in your OpenCode project and update the absolute executable path. Set `BOUNTYPROOF_WORKSPACE` and any credential environment variables before starting OpenCode. OpenCode expands `{env:VARIABLE}` and passes the value to the MCP process through its `environment` option, so secrets do not need to be written into the config file.
 
-Salin `.opencode/commands/bounty-start.md` ke project tempat OpenCode dijalankan, atau ke `~/.config/opencode/commands/bounty-start.md` agar tersedia global. Mulai setiap engagement dengan:
+Copy `.opencode/commands/bounty-start.md` into the project where OpenCode runs, or place it at `~/.config/opencode/commands/bounty-start.md` to make it available globally. Start each engagement with:
 
 ```text
 /bounty-start
 ```
 
-Command tersebut memaksa OpenCode bertanya tentang program, in-scope, out-of-scope, rules, aktivitas yang benar-benar diizinkan, larangan, rate limit, dan konfirmasi otorisasi. Setelah ringkasan dikonfirmasi, OpenCode memanggil `bountyproof_start_session` dan mengembalikan `session_id`. MCP tidak dapat membuka dialog secara sepihak hanya karena proses server baru menyala; interaksi harus dimulai oleh request client, sehingga custom command adalah entrypoint yang tepat.
+The command asks for the program name, in-scope assets, exclusions, rules, allowed activities, restrictions, rate limit, and confirmation that the test is authorized. Once you approve the summary, OpenCode calls `bountyproof_start_session` and returns a `session_id`.
 
-Konfigurasi MCP client generik selain OpenCode:
+An MCP server cannot open a dialog simply because its process has started. The client must initiate the interaction, which is why the custom command is the entry point.
+
+For MCP clients other than OpenCode:
 
 ```json
 {
@@ -104,30 +119,30 @@ Konfigurasi MCP client generik selain OpenCode:
 }
 ```
 
-Di Windows, gunakan `.venv\\Scripts\\bountyproof-mcp.exe`.
+On Windows, use `.venv\\Scripts\\bountyproof-mcp.exe`.
 
 ## Workflow
 
-### 1. Buat sesi
+### 1. Start a session
 
-Jalankan `/bounty-start` di OpenCode. Scope yang didukung:
+Run `/bounty-start` in OpenCode. Supported scope formats include:
 
 - Exact host: `api.example.com`
 - Wildcard subdomain: `*.example.com`
-- URL/path prefix: `https://app.example.com/api/`
+- URL and path prefix: `https://app.example.com/api/`
 
-Out-of-scope selalu menang. Contoh: in-scope `https://app.example.com/api/` dengan out-of-scope `https://app.example.com/api/admin/` akan menolak seluruh path admin.
+Out-of-scope entries always win. For example, an in-scope entry of `https://app.example.com/api/` combined with an exclusion of `https://app.example.com/api/admin/` blocks the entire admin path.
 
-### 2. Preflight
+### 2. Run preflight
 
 ```text
 scope_check(session_id="session-...", url="https://app.example.com/")
 preflight_target(session_id="session-...", url="https://app.example.com/", samples=3)
 ```
 
-Preflight mengirim 2-5 GET ke URL yang sama. Tidak ada payload serangan.
+Preflight sends between two and five GET requests to the same URL. It does not send attack payloads.
 
-### 3. Discovery
+### 3. Discover the surface
 
 ```text
 discover_surface(
@@ -138,9 +153,9 @@ discover_surface(
 )
 ```
 
-Katana dipaksa ke scope `fqdn`, concurrency 1, dan rate limit sesi (maksimum 2 request/detik).
+Katana is restricted to `fqdn` scope, concurrency 1, and the session rate limit, with a hard maximum of two requests per second.
 
-### 4. High-signal scan
+### 4. Run a high-signal scan
 
 ```text
 scan_high_signal(
@@ -151,9 +166,9 @@ scan_high_signal(
 )
 ```
 
-Profil `high-signal` hanya high/critical. Profil `critical-only` lebih sempit. Hasil Nuclei tetap disebut candidate.
+The `high-signal` profile includes only high and critical findings. The `critical-only` profile is narrower. A Nuclei match remains a candidate until it has been verified.
 
-### 5. Verification
+### 5. Verify a candidate
 
 ```text
 verify_finding(
@@ -164,16 +179,16 @@ verify_finding(
 )
 ```
 
-Status `repeatable-candidate` berarti template yang sama match pada setiap putaran. Dampak bisnis dan kepatuhan terhadap policy program tetap harus divalidasi manual.
+`repeatable-candidate` means that the same template matched on every verification round. Business impact and program-policy compliance still require manual review.
 
-### 6. Origin discovery dan verification
+### 6. Check a possible origin
 
-`find_origin_candidates` menggunakan dua sumber:
+`find_origin_candidates` uses two sources:
 
-- Resolusi DNS terhadap hostname berlabel `origin`, `direct`, `backend`, `server`, `dev`, atau `staging`, tetapi hanya jika hostname itu sendiri cocok dengan wildcard in-scope dan tidak cocok dengan out-of-scope.
-- Historical A record SecurityTrails bila `BOUNTYPROOF_SECURITYTRAILS_API_KEY` tersedia. Dokumentasi resmi SecurityTrails memang menyebut endpoint historical DNS ini dapat digunakan untuk mencari IP asli di balik proxy seperti Cloudflare.
+- DNS resolution for hostnames labeled `origin`, `direct`, `backend`, `server`, `dev`, or `staging`. A hostname is queried only when it matches the wildcard scope and is not excluded.
+- Historical A records from SecurityTrails when `BOUNTYPROOF_SECURITYTRAILS_API_KEY` is configured.
 
-Hasil tahap ini selalu `unverified-origin-candidate`. Agent tidak boleh langsung menjalankan scanner terhadap IP tersebut.
+Every result starts as an `unverified-origin-candidate`. Do not send it directly to a scanner.
 
 ```text
 find_origin_candidates(
@@ -183,7 +198,7 @@ find_origin_candidates(
 )
 ```
 
-Jika activity `origin-verification` diizinkan rules, agent harus menunjukkan kandidat IP kepada pengguna dan meminta konfirmasi baru. Setelah itu, tool mengirim tepat dua request: satu ke edge dan satu langsung ke kandidat IP menggunakan TLS SNI serta HTTP `Host` target.
+If `origin-verification` is allowed by the program rules, review the candidate IP and confirm a direct request separately. The verification tool then sends exactly two requests: one to the edge and one to the candidate IP, using the target's TLS SNI and HTTP `Host` header.
 
 ```text
 verify_origin_candidate(
@@ -194,11 +209,13 @@ verify_origin_candidate(
 )
 ```
 
-Setelah verification, automasi selalu berhenti. Agent harus menampilkan bukti, memeriksa ownership/provider serta apakah IP mentah memang masuk scope, dan tidak boleh meneruskan IP ke `scan_high_signal`. Pengujian tambahan memerlukan keputusan eksplisit baru dari pengguna.
+The workflow stops after this comparison. Review the evidence, check the IP owner and hosting provider, and confirm whether the raw IP is covered by the program scope. BountyProof will not pass the IP to `scan_high_signal`. Any further testing requires a separate decision.
 
-### 7. Surface import dan authorization comparison
+### 7. Import a surface and compare authorization
 
-Surface dapat diimpor dari HAR, OpenAPI JSON/YAML, atau Postman Collection. File wajib berada di `BOUNTYPROOF_IMPORT_ROOT`. Header value dan request body tidak disimpan; hanya header name, parameter name, dan body field name. Endpoint out-of-scope dibuang. Replay URL lengkap hanya berada di laporan lokal yang gitignored, sedangkan output MCP menyamarkan query value dan object-like path segment.
+Surfaces can be imported from HAR, OpenAPI JSON/YAML, or a Postman Collection. The file must be inside `BOUNTYPROOF_IMPORT_ROOT`. Header values and request bodies are not stored; only header names, parameter names, and body field names are retained. Out-of-scope endpoints are discarded.
+
+Full replay URLs remain in the local, gitignored report. MCP output masks query values and path segments that look like object identifiers.
 
 ```text
 import_surface(
@@ -208,7 +225,7 @@ import_surface(
 )
 ```
 
-Credential tidak boleh dikirim melalui chat atau parameter MCP. Atur token/cookie sebagai environment variable pada proses MCP, lalu register referensinya:
+Do not send credentials through chat or MCP parameters. Put tokens or cookies in environment variables available to the MCP process, then register references to those variables:
 
 ```powershell
 $env:BOUNTY_USER_A_TOKEN = "<SET_OUTSIDE_CHAT>"
@@ -226,7 +243,7 @@ register_auth_profiles(
 )
 ```
 
-`compare_authorization` hanya menerima endpoint GET replayable. Tool tidak mengganti ID, parameter, method, atau body. Respons owner dan comparison profile diambil 2-3 kali. Candidate hanya dibuat bila comparison profile berulang kali mendapat 2xx dengan body identik atau canonical JSON stabil yang sama dengan owner.
+`compare_authorization` accepts only replayable GET endpoints. It does not change the object ID, parameters, method, or body. The owner and comparison profiles are requested two or three times. A candidate is created only when the comparison profile consistently receives a 2xx response whose body is identical to the owner's response or whose canonical JSON is stable and equal.
 
 ```text
 compare_authorization(
@@ -241,36 +258,38 @@ compare_authorization(
 )
 ```
 
-Setelah differential candidate ditemukan, agent berhenti. Ia tidak boleh mengenumerasi atau mengganti object ID secara otomatis. User harus mengonfirmasi bahwa comparison profile memang seharusnya tidak dapat mengakses object tersebut sebelum validasi dampak tambahan.
+The workflow stops when a differential candidate is found. BountyProof does not enumerate or replace object IDs automatically. Before any additional impact testing, confirm that the comparison identity should not have access to the object.
 
-## Evidence dan privasi
+## Evidence and privacy
 
-Sesi disimpan di `.bountyproof/sessions/`, auth profile metadata di `.bountyproof/auth-profiles/`, dan laporan di `.bountyproof/reports/`; semuanya dikecualikan dari Git. Auth profile hanya menyimpan nama environment variable, bukan nilainya. Raw request/response Nuclei tetap lokal dan tidak dikembalikan melalui MCP. Field `authorization`, `cookie`, dan `set-cookie` diperintahkan untuk direduksi oleh Nuclei.
+Sessions are stored in `.bountyproof/sessions/`, authentication profile metadata in `.bountyproof/auth-profiles/`, and reports in `.bountyproof/reports/`. All three paths are excluded from Git.
 
-## Konfigurasi
+Authentication profiles contain environment variable names, not their values. Raw Nuclei request and response data stays local and is not returned through MCP. Nuclei is instructed to redact `authorization`, `cookie`, and `set-cookie` fields.
 
-| Variabel | Default | Fungsi |
+## Configuration
+
+| Variable | Default | Purpose |
 |---|---:|---|
-| `BOUNTYPROOF_ALLOWED_PORTS` | `443` | Port yang diizinkan |
-| `BOUNTYPROOF_ALLOW_HTTP` | `false` | Izinkan HTTP tanpa TLS |
-| `BOUNTYPROOF_ALLOW_PRIVATE` | `false` | Izinkan IP non-publik untuk lab |
-| `BOUNTYPROOF_VERIFY_TLS` | `true` | Verifikasi sertifikat TLS |
-| `BOUNTYPROOF_DELAY_MS` | `350` | Jeda preflight |
-| `BOUNTYPROOF_MAX_URLS` | `100` | Batas hasil discovery |
-| `BOUNTYPROOF_NUCLEI_RATE_LIMIT` | `2` | Maksimum request Nuclei/detik |
-| `BOUNTYPROOF_REPORT_DIR` | `.bountyproof/reports` | Evidence lokal |
-| `BOUNTYPROOF_SECURITYTRAILS_API_KEY` | kosong | Historical A records opsional; tidak ditulis ke laporan |
-| `BOUNTYPROOF_IMPORT_ROOT` | current directory | Root yang diizinkan untuk HAR/OpenAPI/Postman |
-| `BOUNTYPROOF_MAX_IMPORT_BYTES` | `20000000` | Batas ukuran file surface |
+| `BOUNTYPROOF_ALLOWED_PORTS` | `443` | Allowed destination ports |
+| `BOUNTYPROOF_ALLOW_HTTP` | `false` | Allow unencrypted HTTP |
+| `BOUNTYPROOF_ALLOW_PRIVATE` | `false` | Allow non-public IP addresses for lab use |
+| `BOUNTYPROOF_VERIFY_TLS` | `true` | Verify TLS certificates |
+| `BOUNTYPROOF_DELAY_MS` | `350` | Delay between preflight requests |
+| `BOUNTYPROOF_MAX_URLS` | `100` | Maximum number of discovered URLs |
+| `BOUNTYPROOF_NUCLEI_RATE_LIMIT` | `2` | Maximum Nuclei requests per second |
+| `BOUNTYPROOF_REPORT_DIR` | `.bountyproof/reports` | Local evidence directory |
+| `BOUNTYPROOF_SECURITYTRAILS_API_KEY` | empty | Optional historical DNS lookup; never written to reports |
+| `BOUNTYPROOF_IMPORT_ROOT` | current directory | Allowed root for HAR, OpenAPI, and Postman files |
+| `BOUNTYPROOF_MAX_IMPORT_BYTES` | `20000000` | Maximum imported surface file size |
 
-## Test
+## Tests
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-Unit test tidak mengakses target eksternal.
+The unit tests do not contact external targets.
 
-## Lisensi
+## License
 
-MIT. Terinspirasi oleh ide orkestrasi MCP pada HexStrike AI, tetapi implementasinya baru dan secara sengaja hanya memakai pipeline kecil dengan guardrail ketat.
+MIT. The project was inspired by HexStrike AI's MCP orchestration concept, but the implementation is independent and deliberately limited to a small workflow with strict guardrails.
