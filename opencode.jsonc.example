@@ -1,0 +1,35 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "bountyproof": {
+      "type": "local",
+      "command": [
+        "C:\\absolute\\path\\to\\bountyproof-mcp\\.venv\\Scripts\\bountyproof-mcp.exe"
+      ],
+      "cwd": "{env:BOUNTYPROOF_WORKSPACE}",
+      "environment": {
+        "BOUNTYPROOF_IMPORT_ROOT": "{env:BOUNTYPROOF_WORKSPACE}",
+        "BOUNTY_USER_A_TOKEN": "{env:BOUNTY_USER_A_TOKEN}",
+        "BOUNTY_USER_B_TOKEN": "{env:BOUNTY_USER_B_TOKEN}",
+        "BOUNTYPROOF_SECURITYTRAILS_API_KEY": "{env:BOUNTYPROOF_SECURITYTRAILS_API_KEY}"
+      },
+      "enabled": true,
+      "timeout": 10000
+    }
+  },
+  "permission": {
+    "question": "allow",
+    "bountyproof_start_session": "allow",
+    "bountyproof_scope_check": "allow",
+    "bountyproof_get_report": "allow",
+    "bountyproof_preflight_target": "ask",
+    "bountyproof_discover_surface": "ask",
+    "bountyproof_scan_high_signal": "ask",
+    "bountyproof_verify_finding": "ask",
+    "bountyproof_find_origin_candidates": "ask",
+    "bountyproof_verify_origin_candidate": "ask",
+    "bountyproof_import_surface": "ask",
+    "bountyproof_register_auth_profiles": "ask",
+    "bountyproof_compare_authorization": "ask"
+  }
+}

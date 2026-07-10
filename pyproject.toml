@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bountyproof-mcp"
+version = "0.1.0"
+description = "Minimal MCP pipeline for preflight, high-signal bug bounty scanning, and repeatable verification"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "BountyProof contributors" }]
+keywords = ["mcp", "bug-bounty", "nuclei", "katana", "security-testing"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Security",
+]
+dependencies = [
+  "httpx>=0.28,<1",
+  "mcp[cli]>=1.27,<2",
+  "PyYAML>=6,<7",
+]
+
+[project.scripts]
+bountyproof-mcp = "bountyproof_mcp.server:main"
+
+[project.urls]
+Repository = "https://github.com/skyxtools/bountyproof-mcp"
+Issues = "https://github.com/skyxtools/bountyproof-mcp/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bountyproof_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
