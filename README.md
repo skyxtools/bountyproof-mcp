@@ -8,6 +8,12 @@ session (scope + rules) -> preflight -> surface discovery/import -> targeted che
 
 WAF detection is not treated as a vulnerability. It is part of the preflight check, where BountyProof decides whether live testing is practical or likely to be wasted on challenges, rate limits, unstable responses, off-host redirects, or other edge protection.
 
+## Responsible use
+
+BountyProof is provided for educational purposes and authorized security testing only. Use it only on systems you own or targets for which you have explicit permission to test.
+
+You are responsible for following the applicable law, the bug bounty program's scope, and its testing rules. The built-in scope and authorization checks are safeguards, not a substitute for permission. The authors and contributors are not responsible for misuse, unauthorized testing, damage, or legal consequences resulting from the use of this software.
+
 ## What it uses
 
 BountyProof has a built-in HTTP client and relies on only two external binaries:
