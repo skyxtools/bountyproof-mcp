@@ -59,29 +59,75 @@ Cloudflare, Akamai, Imperva, CloudFront, F5, Sucuri, Fastly, and Azure edge indi
 
 ## Installation
 
+BountyProof is developed and documented primarily for Linux. Windows can be used as an optional client environment, but the Linux setup is the reference configuration.
+
+### Linux (recommended)
+
 Requirements:
 
 - Python 3.11 or newer
-- Katana
-- Nuclei and nuclei-templates
+- Git
+- Katana available in `PATH`
+- Nuclei and nuclei-templates available in `PATH`
+
+On Debian or Ubuntu, install the base packages first:
+
+```bash
+sudo apt update
+sudo apt install -y git python3 python3-pip python3-venv
+```
+
+Clone and install BountyProof:
 
 ```bash
 git clone https://github.com/skyxtools/bountyproof-mcp.git
 cd bountyproof-mcp
-python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -e .
 ```
 
-Basic PowerShell configuration:
+Set the runtime environment and start the MCP server:
+
+```bash
+export BOUNTYPROOF_WORKSPACE="$(pwd)"
+export BOUNTYPROOF_ALLOWED_PORTS="443"
+export BOUNTYPROOF_CONTACT="researcher@example.com"
+bountyproof-mcp
+```
+
+If Katana or Nuclei is not in `PATH`, set the executable paths explicitly:
+
+```bash
+export BOUNTYPROOF_KATANA_BIN="$HOME/go/bin/katana"
+export BOUNTYPROOF_NUCLEI_BIN="$HOME/go/bin/nuclei"
+```
+
+Confirm that both tools are available before starting OpenCode:
+
+```bash
+"$BOUNTYPROOF_KATANA_BIN" -version
+"$BOUNTYPROOF_NUCLEI_BIN" -version
+```
+
+### Windows (optional)
+
+Windows is not the primary environment, but the MCP server can still be installed with PowerShell:
 
 ```powershell
+git clone https://github.com/skyxtools/bountyproof-mcp.git
+cd bountyproof-mcp
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+
+$env:BOUNTYPROOF_WORKSPACE = (Get-Location).Path
 $env:BOUNTYPROOF_ALLOWED_PORTS = "443"
 $env:BOUNTYPROOF_CONTACT = "researcher@example.com"
 bountyproof-mcp
 ```
 
-If Katana or Nuclei is not in `PATH`, set the executable paths explicitly:
+If the external tools are not in `PATH`:
 
 ```powershell
 $env:BOUNTYPROOF_KATANA_BIN = "C:\Tools\katana.exe"
@@ -90,7 +136,7 @@ $env:BOUNTYPROOF_NUCLEI_BIN = "C:\Tools\nuclei.exe"
 
 ## OpenCode setup
 
-Copy [opencode.jsonc.example](opencode.jsonc.example) to `opencode.jsonc` in your OpenCode project and update the absolute executable path. Set `BOUNTYPROOF_WORKSPACE` and any credential environment variables before starting OpenCode. OpenCode expands `{env:VARIABLE}` and passes the value to the MCP process through its `environment` option, so secrets do not need to be written into the config file.
+Copy [opencode.jsonc.example](opencode.jsonc.example) to `opencode.jsonc` in your OpenCode project and update the Linux executable path to the absolute path of `.venv/bin/bountyproof-mcp`. Set `BOUNTYPROOF_WORKSPACE` and any credential environment variables in the shell before starting OpenCode. OpenCode expands `{env:VARIABLE}` and passes the value to the MCP process through its `environment` option, so secrets do not need to be written into the config file.
 
 Copy `.opencode/commands/bounty-start.md` into the project where OpenCode runs, or place it at `~/.config/opencode/commands/bounty-start.md` to make it available globally. Start each engagement with:
 
@@ -119,7 +165,7 @@ For MCP clients other than OpenCode:
 }
 ```
 
-On Windows, use `.venv\\Scripts\\bountyproof-mcp.exe`.
+For the optional Windows setup, replace the command with the absolute path to `.venv\\Scripts\\bountyproof-mcp.exe`.
 
 ## Workflow
 
@@ -227,10 +273,12 @@ import_surface(
 
 Do not send credentials through chat or MCP parameters. Put tokens or cookies in environment variables available to the MCP process, then register references to those variables:
 
-```powershell
-$env:BOUNTY_USER_A_TOKEN = "<SET_OUTSIDE_CHAT>"
-$env:BOUNTY_USER_B_TOKEN = "<SET_OUTSIDE_CHAT>"
+```bash
+export BOUNTY_USER_A_TOKEN="<SET_OUTSIDE_CHAT>"
+export BOUNTY_USER_B_TOKEN="<SET_OUTSIDE_CHAT>"
 ```
+
+On optional Windows clients, set the same variables with `$env:BOUNTY_USER_A_TOKEN` and `$env:BOUNTY_USER_B_TOKEN` in PowerShell.
 
 ```text
 register_auth_profiles(

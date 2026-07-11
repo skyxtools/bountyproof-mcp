@@ -4,7 +4,7 @@
     "bountyproof": {
       "type": "local",
       "command": [
-        "C:\\absolute\\path\\to\\bountyproof-mcp\\.venv\\Scripts\\bountyproof-mcp.exe"
+        "/absolute/path/to/bountyproof-mcp/.venv/bin/bountyproof-mcp"
       ],
       "cwd": "{env:BOUNTYPROOF_WORKSPACE}",
       "environment": {
